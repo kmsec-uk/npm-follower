@@ -1,6 +1,6 @@
 # npm replicate feed follower
 
-golang library for following npm registry via the CouchDB API (replicate.npmjs.com/registry/_changes).
+golang library for following updates to the npm registry via the CouchDB API (replicate.npmjs.com/registry/_changes).
 
 Designed to be simple to setup and start receiving events through a channel:
 
@@ -105,7 +105,7 @@ The CouchDB _changes API exposes specific change IDs (`_rev` property) that repr
 
 Unfortunately, it is common for the actual registry CDN to lag behind the _changes feed, likely due to replication lag or cache.
 
-For example, take the following code, which fetches the packument from the registry after receiving a _changes event (this is the recommended approach btw):
+For example, take the following code, which fetches the packument from the registry after receiving a _changes event (this is the [recommended approach](https://github.com/orgs/community/discussions/152515#discussion-8017309) btw):
 
 ```go
 	for event := range f.Connect(ctx) {
@@ -150,4 +150,4 @@ Effectively, we are *too early* to catch the latest revision.
 
 Without implementing some kind of delay or retry (which comes with their own problems -- namely being too *late* for a _rev or hammering the registry repeatedly), we end up with mismatching documents and effectively an out-of-date replicant. It is *not possible to query the registry for a specific _rev*, making this problem even more stark.
 
-Additionally -- while I've made a best-effort attempt to create a Packument unmarshaler, there really isn't much of a strict standard. Therefore, you may hit unmarshalling issues.
+On top of replication unreliability, while I've made a best-effort attempt to create a Packument unmarshaler, there really isn't much of a strict standard and they come in all shapes and sizes. Therefore, you may hit unmarshalling issues. In cases where you must not face unmarshalling errors, use the Fetch* utility functions, which return the response.Body for you to use as-is.

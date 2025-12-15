@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/kmsec-uk/npm-replicate-follower/couch"
+	"github.com/kmsec-uk/npm-follower/couch"
 )
 
 func main() {
