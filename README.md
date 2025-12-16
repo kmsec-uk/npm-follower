@@ -155,7 +155,7 @@ A simple solution is to simply wait for replication and cache update by setting 
 ```go
 func main() {
 	ctx := context.Background()
-	log.Println("helllo from the printer")
+	log.Println("hello from the printer")
 	// create the follower
 	f := couch.NewFollower().WithPollingInterval(5 * time.Second)
 	// connect and start receiving changes from the channel
