@@ -1,4 +1,4 @@
-# npm replicate feed follower
+# npm feed follower
 
 golang library for following updates to the npm registry via the CouchDB API (replicate.npmjs.com/registry/_changes).
 
@@ -149,5 +149,62 @@ When reviewing logs, you might find the Packument _rev on the registry lags behi
 Effectively, we are *too early* to catch the latest revision.
 
 Without implementing some kind of delay or retry (which comes with their own problems -- namely being too *late* for a _rev or hammering the registry repeatedly), we end up with mismatching documents and effectively an out-of-date replicant. It is *not possible to query the registry for a specific _rev*, making this problem even more stark.
+
+A simple solution is to simply wait for replication and cache update by setting a timer. The full example below (as shown in cmd/printer/main.go) simply waits for 10 seconds, which seems to be long enough for the registry to catch up and short enough that no subsequent updates wipe this history:
+
+```go
+func main() {
+	ctx := context.Background()
+	log.Println("helllo from the printer")
+	// create the follower
+	f := couch.NewFollower().WithPollingInterval(5 * time.Second)
+	// connect and start receiving changes from the channel
+
+	var wg sync.WaitGroup
+	for event := range f.Connect(ctx) {
+		// skip error cases
+		if err := event.Error; err != nil {
+			log.Printf("error polling: %v\n", err)
+			continue
+		}
+
+		// skip deletions
+		if event.Change.Deleted {
+			log.Printf("%s: deleted\n", event.Change.ID)
+			continue
+		}
+		// start goroutine
+		wg.Go(func() {
+			select {
+
+			case <-time.After(10 * time.Second):
+				// wait 10 seconds before getting packument
+			case <-ctx.Done():
+				return
+			}
+			// get full packument details
+			p, err := f.GetPackument(ctx, &event.Change)
+			if err != nil {
+				log.Printf("%s: error getting packument: %v\n", event.Change.ID, err)
+				return
+			}
+
+			// check that the Packument _rev property is aligned with the _changes feed _rev
+			if !event.Change.HasRevision(p.Rev) {
+				log.Printf("%s: Packument revision (_rev property) %s not in _changes feed. CouchDB says %s", event.Change.ID, p.Rev, event.Change.Changes[0].Rev)
+			}
+			// do something with the Packument here -- this example gets the latest
+			// version (Latest() convenience utility and logs version manifest metadata)
+			latest := p.Latest()
+			log.Printf("%s: updated - latest version %s was published by npm user %s (%s)", event.Change.ID, latest.Version, latest.NpmUser.Name, latest.NpmUser.Email)
+		})
+
+	}
+	// Wait for all the 10-second timers to finish before quitting completely
+	log.Println("shutting down, waiting for pending workers...")
+	wg.Wait()
+}
+
+```
 
 On top of replication unreliability, while I've made a best-effort attempt to create a Packument unmarshaler, there really isn't much of a strict standard and they come in all shapes and sizes. Therefore, you may hit unmarshalling issues. In cases where you must not face unmarshalling errors, use the Fetch* utility functions, which return the response.Body for you to use as-is.
